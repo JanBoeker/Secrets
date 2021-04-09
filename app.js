@@ -4,6 +4,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
+const encrypt = require("mongoose-encryption");
 
 const app = express();
 
@@ -17,10 +18,16 @@ app.set("view engine", "ejs");
 // connect with mongodb --> mongod --dbpath ~/data/db --> mongo
 mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
 
-const userSchema = {
+// mongoose schema is required for the encryption: https://preview.npmjs.com/package/mongoose-encryption
+const userSchema = new mongoose.Schema ({
   email: String,
   password: String
-};
+});
+
+const secret = "ThisIsOurLittleSecret.";
+
+// Mongoose plugin: https://mongoosejs.com/docs/plugins.html
+userSchema.plugin(encrypt, { secret: secret, encryptedFields: ['password'] });
 
 const User = new mongoose.model("User", userSchema);
 
@@ -36,6 +43,11 @@ app.get("/login", function(req, res) {
 app.get("/register", function(req, res) {
   res.render("register");
 });
+
+app.get("/logout", function(req, res) {
+  res.render("home");
+});
+
 
 //////////////////////////// register a new user ////////////////////////////
 app.post("/register", function(req, res) {
@@ -78,6 +90,7 @@ app.post("/login", function(req, res) {
       res.render("upps", {message : "An error occured while fetching data from the DB."});
     } else {
       if (foundUser) {
+        console.log(foundUser.password);
         if (foundUser.password === req.body.password) {
           res.render("secrets");
         } else {
