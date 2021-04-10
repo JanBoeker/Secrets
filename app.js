@@ -1,5 +1,8 @@
 //jshint esversion:6
 
+// Environment variables
+require('dotenv').config()
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
@@ -9,6 +12,9 @@ const encrypt = require("mongoose-encryption");
 const app = express();
 
 const port = process.env.PORT || 3000;
+
+// Usage of the environment variables
+//console.log(process.env.API_KEY);
 
 app.use(express.static("public"));
 app.use(bodyParser.urlencoded({extended: true}));
@@ -24,10 +30,8 @@ const userSchema = new mongoose.Schema ({
   password: String
 });
 
-const secret = "ThisIsOurLittleSecret.";
-
 // Mongoose plugin: https://mongoosejs.com/docs/plugins.html
-userSchema.plugin(encrypt, { secret: secret, encryptedFields: ['password'] });
+userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
 
 const User = new mongoose.model("User", userSchema);
 
