@@ -8,7 +8,9 @@ const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 //const encrypt = require("mongoose-encryption");
-const md5 = require("md5");
+//const md5 = require("md5");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 
@@ -67,18 +69,30 @@ app.post("/register", function(req, res) {
         res.render("upps", {message : "The user exists already."});
       } else {
         // create a new user
-        const newUser = new User({
-          email: req.body.username,
-          password: md5(req.body.password)
-        });
 
-        // save the new user
-        newUser.save(function(err) {
-          if(err) {
+        // creat hash to store in DB
+        bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+          // Store hash in your password DB.
+          if (err) {
             console.log(err);
-            res.render("upps", {message : "An error occured while writing data to the DB."});
+            res.render("upps", {message : "An error occured while hashing your password."});
           } else {
-            res.render("secrets");
+            console.log(hash);
+
+            const newUser = new User({
+              email: req.body.username,
+              password: hash
+            });
+
+            // save the new user
+            newUser.save(function(err) {
+              if(err) {
+                console.log(err);
+                res.render("upps", {message : "An error occured while writing data to the DB."});
+              } else {
+                res.render("secrets");
+              }
+            });
           }
         });
       }
@@ -95,13 +109,26 @@ app.post("/login", function(req, res) {
       res.render("upps", {message : "An error occured while fetching data from the DB."});
     } else {
       if (foundUser) {
-        console.log(foundUser.password);
-        if (foundUser.password === md5(req.body.password)) {
-          res.render("secrets");
-        } else {
-          console.log("Password incorrect");
-          res.render("upps", {message : "Password incorrect"});
-        }
+
+        // Load hash from your password DB.
+        bcrypt.compare(req.body.password, foundUser.password, function(err, result) {
+          // result == true
+          if (err) {
+            console.log(err);
+            res.render("upps", {message : "Something went wrong, try again later."});
+          } else {
+            if (result === true) {
+              res.render("secrets");
+            } else {
+              console.log("Password incorrect");
+              res.render("upps", {message : "Password incorrect"});
+            }
+          }
+
+        });
+
+
+
 
       } else {
         console.log("No user found");
