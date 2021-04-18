@@ -1,7 +1,7 @@
 //jshint esversion:6
 
 // Environment variables
-require('dotenv').config()
+require("dotenv").config()
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -12,9 +12,11 @@ const mongoose = require("mongoose");
 // const bcrypt = require("bcrypt");
 // const saltRounds = 10;
 
-const session = require('express-session');
+const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const findOrCreate = require("mongoose-findorcreate")
 
 const app = express();
 
@@ -45,7 +47,7 @@ app.use(passport.session());
 mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
 
 // To solve the DeprecationWarning "collection.ensureIndex is deprecated. Use createIndexes instead"
-mongoose.set('useCreateIndex', true);
+mongoose.set("useCreateIndex", true);
 
 // mongoose schema is required for the encryption: https://preview.npmjs.com/package/mongoose-encryption
 const userSchema = new mongoose.Schema ({
@@ -55,8 +57,9 @@ const userSchema = new mongoose.Schema ({
 
 // Mongoose plugin: https://mongoosejs.com/docs/plugins.html
 userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 
-// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
+// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
 
 const User = new mongoose.model("User", userSchema);
 
@@ -65,10 +68,41 @@ passport.use(User.createStrategy());
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
+//////////////////////////// Google OAuth ////////////////////////////
+// The google+ API is deprecated:
+//see issue #50 on github.com/jaredhanson/passport-google-oauth2.git
+// --> https://github.com/jaredhanson/passport-google-oauth2/pull/51
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+    // findOrCreate is not provided by mongoose directly: https://preview.npmjs.com/package/mongoose-findorcreate
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+
 //////////////////////////// routes ////////////////////////////
 app.get("/", function(req, res) {
   res.render("home");
 });
+
+//////////////////////////// Google OAuth ////////////////////////////
+app.get("/auth/google",
+  passport.authenticate("google", { scope: ["profile"]})
+);
+
+app.get("/auth/google/secrets",
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  });
 
 app.get("/login", function(req, res) {
   res.render("login");
