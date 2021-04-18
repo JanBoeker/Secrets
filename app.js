@@ -55,7 +55,8 @@ const userSchema = new mongoose.Schema ({
   email: String,
   password: String,
   googleId: String,
-  facebookId: String
+  facebookId: String,
+  secret: String
 });
 
 // Mongoose plugin: https://mongoosejs.com/docs/plugins.html
@@ -92,7 +93,7 @@ passport.use(new GoogleStrategy({
     console.log(profile);
 
     // findOrCreate is not provided by mongoose directly: https://preview.npmjs.com/package/mongoose-findorcreate
-    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+    User.findOrCreate({ googleId: profile.id, username: profile.displayName}, function (err, user) {
       return cb(err, user);
     });
   }
@@ -107,7 +108,7 @@ passport.use(new FacebookStrategy({
   function(accessToken, refreshToken, profile, cb) {
     console.log(profile);
 
-    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+    User.findOrCreate({ facebookId: profile.id, username: profile.displayName}, function (err, user) {
       return cb(err, user);
     });
   }
@@ -149,6 +150,16 @@ app.get("/register", function(req, res) {
   res.render("register");
 });
 
+app.get("/submit", function(req, res) {
+
+  if (req.isAuthenticated()) {
+    res.render("submit");
+  } else {
+    res.redirect("/login");
+  }
+
+});
+
 app.get("/logout", function(req, res) {
 
   // end current session and redirect
@@ -160,7 +171,21 @@ app.get("/logout", function(req, res) {
 app.get("/secrets", function(req, res) {
 
   if (req.isAuthenticated()) {
-    res.render("secrets");
+
+    // find all secrets of all users
+    //$ne: null --> not equal to null
+    User.find({secret: {$ne: null}}, function(err, foundUsers) {
+      if (err) {
+        console.log(err);
+        res.render("upps", {message : err});
+      } else {
+        if (foundUsers) {
+          console.log(foundUsers);
+          res.render("secrets", {usersWithSecrets: foundUsers});
+        }
+      }
+    });
+
   } else {
     res.redirect("/login");
   }
@@ -280,6 +305,25 @@ app.post("/login", function(req, res) {
 
 });
 
+app.post("/submit", function(req, res) {
+  const submittedSecret = req.body.secret;
+  console.log(req.user.id);
+
+  User.findById(req.user.id, function(err, foundUser) {
+    if (err) {
+      console.log(err);
+      res.render("upps", {message : err});
+    } else {
+      if (foundUser) {
+        foundUser.secret = submittedSecret;
+        foundUser.save(function() {
+          res.redirect("/secrets");
+        });
+      }
+    }
+  });
+
+});
 
 //////////////////////////// Server ////////////////////////////
 app.listen(port, () => console.log("Server started at port: "+ port));
